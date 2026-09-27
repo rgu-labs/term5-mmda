@@ -54,14 +54,14 @@ struct Extrema final {
 struct Norms final {
     Extrema Infinity = {};
     Extrema L1 = {};
-    Extrema LP = {};
-    Extrema Quadratic = {};
+    Extrema L2L = {};
+    Extrema SPDMatrix = {};
 
     void Merge(const Norms &other) {
         Infinity.Merge(other.Infinity);
         L1.Merge(other.L1);
-        LP.Merge(other.LP);
-        Quadratic.Merge(other.Quadratic);
+        L2L.Merge(other.L2L);
+        SPDMatrix.Merge(other.SPDMatrix);
     }
 };
 
@@ -104,8 +104,8 @@ void Scan(i32 begin, i32 end, const Matrix &a, Norms &norms) {
 
         norms.Infinity.Add(x.cwiseAbs().maxCoeff(), x);
         norms.L1.Add(x.lpNorm<1>(), x);
-        norms.LP.Add(x.lpNorm<2 * HalfPower>(), x);
-        norms.Quadratic.Add((a * x).dot(x), x);
+        norms.L2L.Add(x.lpNorm<2 * HalfPower>(), x);
+        norms.SPDMatrix.Add((a * x).dot(x), x);
     }
 }
 
@@ -165,9 +165,9 @@ int main() {
         blockSize,
         VectorCount);
     MDAA_CHECKF(
-        norms.Quadratic.Min > 0.0,
+        norms.SPDMatrix.Min > 0.0,
         "every x^T A x has to be positive for a positive definite A, the smallest is {}",
-        norms.Quadratic.Min);
+        norms.SPDMatrix.Min);
 
     std::println(
         "{} vectors of N = {}, 2l = {}, {} threads, {:.2f} s\n",
@@ -179,8 +179,8 @@ int main() {
 
     Report("||X||_inf     ", norms.Infinity);
     Report("||X||_1       ", norms.L1);
-    Report("||X||_2l      ", norms.LP);
-    Report("||X||_A       ", norms.Quadratic);
+    Report("||X||_2l      ", norms.L2L);
+    Report("||X||_A       ", norms.SPDMatrix);
 
     return 0;
 }
