@@ -9,6 +9,7 @@ namespace {
 
 using MDAA::f64;
 using MDAA::i32;
+using MDAA::u32;
 using MDAA::u64;
 
 using Vector = Eigen::VectorXd;
@@ -64,7 +65,7 @@ struct Norms final {
     }
 };
 
-Matrix MakeSymmetricPositiveDefinite(i32 n, u64 seed) {
+Matrix CreateRandomSPDMatrix(i32 n, u64 seed) {
     MDAA_CHECKF(n > 0, "a matrix needs a positive size, got n = {}", n);
 
     MDAA::Random random(seed);
@@ -130,9 +131,9 @@ void Report(const char *symbol, const Extrema &extrema) {
 int main() {
     Eigen::setNbThreads(1);
 
-    const Matrix a = MakeSymmetricPositiveDefinite(Dimension, Seed);
+    const Matrix a = CreateRandomSPDMatrix(Dimension, Seed);
 
-    const i32 threadCount = static_cast<i32>(std::max(1u, std::thread::hardware_concurrency()));
+    const i32 threadCount = static_cast<i32>(std::max(u32(1), std::thread::hardware_concurrency()));
     const i32 blockSize = (VectorCount + threadCount - 1) / threadCount;
 
     MDAA::Timer timer;
