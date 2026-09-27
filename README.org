@@ -1,0 +1,114 @@
+#+title: Math methods for data processing and analysis
+#+startup: overview
+
+Labs of the term 5 course MMDA. Every lab is a small standalone program that
+computes something and prints the result.
+
+* Quick start
+
+#+begin_src sh
+make                # configure and build the Development config
+make run lab=Lab01   # build and run Lab01
+make list           # what labs exist
+make help           # all targets
+#+end_src
+
+The first run configures CMake and creates =Build/Development=; the binary lands
+in =Build/Development/Target/Lab01= and is executed from the repository root, so
+relative paths in your code work as you would expect.
+
+Two build configurations exist, both configured by the Makefile:
+
+| Configuration | Flags         | Used for                                  |
+|---------------+---------------+-------------------------------------------|
+| Development   | =-O3=         | measuring results, this is the default    |
+| Debug         | =-O0 -g3=     | stepping through a lab in a debugger      |
+
+=make run-debug lab=Lab01= builds and runs the Debug configuration instead.
+=make run lab=Lab01 LAB_ARGS="--n 1000"= passes the arguments on to the lab.
+=make configure= prepares both at once, =make clean= removes =Build/=.
+
+* Layout
+
+#+begin_example
+.
+├── CMake/                  build rules used by CMakeLists.txt
+├── Source/                 code shared by every lab
+│   ├── Public/MDAA/        header only, include as "MDAA/MDAA.h"
+│   └── CMakeLists.txt      builds it as the MDAA::Common target
+└── Labs/
+    ├── Lab01/              one directory per lab, named after the lab
+    │   ├── CMakeLists.txt
+    │   └── Main.cpp        the whole lab
+    └── Template/           copy this to start a new lab
+#+end_example
+
+=Source/= is the common part: no lab code goes there, and a lab only gets what
+it needs from it. The headers there are header only, exposed as the CMake
+target =MDAA::Common=:
+
+| Header         | What it is                                            |
+|----------------+-------------------------------------------------------|
+| =MDAA.h=       | precompiled header, pulls in all of the below         |
+| =Types.h=      | =u32=, =i32=, =f64=, =usize=, the size is in the name |
+| =Assert.h=     | =MDAA_CHECK=, =MDAA_CHECKF=, =MDAA_FATAL=            |
+| =Random.h=     | =MDAA::Random=, seeded and reproducible              |
+| =Timer.h=      | =MDAA::Timer=, wall clock stopwatch                  |
+| =Macro.h=      | stringification helpers for the asserts               |
+
+A lab includes =MDAA/MDAA.h= and nothing else from =Source/=:
+
+#+begin_src cpp
+#include "MDAA/MDAA.h"
+#+end_src
+
+It is registered as a precompiled header on =MDAA::Common=, so it is built once
+per configuration into =Build/*/Labs/*/CMakeFiles/LabNN.dir/cmake_pch.hxx.gch=
+and every lab of that configuration reuses it. A new shared header is picked up
+by adding one line to =MDAA.h=; no lab needs to be touched.
+
+Anything that a single lab needs lives in that lab's =Main.cpp=. If a second
+lab ends up needing the same code, that is the moment it moves to =Source/=.
+
+* Adding a lab
+
+1. copy the template, naming the directory after the lab:
+   ~cp -r Labs/Template Labs/Lab02~
+2. set the target name in the copy, =Labs/Lab02/CMakeLists.txt=:
+   ~NAME Lab02~
+3. add one line to =Labs/CMakeLists.txt=:
+   ~add_subdirectory(Lab02)~
+4. ~make run lab=Lab02~
+
+The directory, the CMake target and the resulting binary are all called
+=Lab02=, which is what =make run lab=~ looks up, and =make list= prints.
+Keep the zero padded number, =Lab02= and not =Lab2=.
+
+* Style
+
+Nesting, naming and formatting follow [[./STYLEGUIDE.org][STYLEGUIDE.org]]:
+PascalCase for types and functions, camelCase for locals, =m_= for private
+members, no =using namespace=. The editor reads the =.clangd=,
+=.clang-format= and =.clang-tidy= in the repository root, clangd works out of
+the box.
+
+- =make format= runs clang-format over the tracked sources
+- =make tidy= runs clang-tidy with warnings as errors, over the =.cpp= files
+  only, the headers come along with the translation units that include them
+
+A couple of C++ things worth knowing, they come from the course conventions and
+not from taste:
+
+- C++23, compiled =gcc= on unix and =cl= on windows, override with
+  =-DCMAKE_CXX_COMPILER=clang++=
+- =-fno-exceptions -fno-rtti=, so no =try=/=catch= and no =dynamic_cast=;
+  a failed check is an =MDAA_CHECK= that aborts
+- =std::println= from =<print>= instead of =std::cout=, formatted with ={}=
+- =-ffast-math= is deliberately never enabled, the labs are about exact
+  floating point behaviour
+- =-DMDAA_NATIVE_ARCH=ON= builds with the instructions of your own cpu, faster
+  but the binary stops working on other machines
+
+One check is off in =.clang-tidy= on purpose, =misc-include-cleaner=: it
+insists that every used symbol has a direct include, which is exactly what the
+umbrella header =MDAA/MDAA.h= is there to avoid.

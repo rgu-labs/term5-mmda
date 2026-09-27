@@ -1,0 +1,8 @@
+mdaa_executable(
+    NAME Lab01
+    SOURCES
+        Main.cpp
+    DEPS
+        MDAA::Common
+        MDAA::Eigen
+)

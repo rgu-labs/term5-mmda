@@ -1,0 +1,24 @@
+# editor specific
+.idea/
+.vs/
+.vscode/
+.projectile
+.tmux-sessionizer
+
+# build artifacts
+Build/
+cmake-build-*/
+out/
+compile_commands.json
+.cache/
+.ninja_deps
+.ninja_log
+
+# random local files
+*.profraw
+*.profdata
+*.o
+*.obj
+*.a
+*.so
+*.exe
