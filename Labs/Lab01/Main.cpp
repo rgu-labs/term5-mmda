@@ -16,7 +16,7 @@ using Vector = Eigen::VectorXd;
 using Matrix = Eigen::MatrixXd;
 
 constexpr i32 VectorCount = 1'000'000;
-constexpr i32 Dimension = 100;
+constexpr i32 Dimension = 10;
 constexpr i32 HalfPower = 2;
 constexpr f64 ComponentMin = -1.0;
 constexpr f64 ComponentMax = 1.0;
@@ -117,6 +117,17 @@ void PrintVector(const char *label, const Vector &vector) {
     std::println("]");
 }
 
+void PrintMatrix(const char *label, const Matrix &matrix) {
+    std::println("{} = {}x{}", label, matrix.rows(), matrix.cols());
+    for (Eigen::Index row = 0; row < matrix.rows(); row++) {
+        std::print("  [");
+        for (Eigen::Index column = 0; column < matrix.cols(); column++) {
+            std::print("{}{:12.6f}", column == 0 ? "" : " ", matrix(row, column));
+        }
+        std::println("]");
+    }
+}
+
 void Report(const char *symbol, const Extrema &extrema) {
     MDAA_CHECK(extrema.Min <= extrema.Max);
 
@@ -132,6 +143,9 @@ int main() {
     Eigen::setNbThreads(1);
 
     const Matrix a = CreateRandomSPDMatrix(Dimension, Seed);
+
+    PrintMatrix("A", a);
+    std::println();
 
     const i32 threadCount = static_cast<i32>(std::max(u32(1), std::thread::hardware_concurrency()));
     const i32 blockSize = (VectorCount + threadCount - 1) / threadCount;
