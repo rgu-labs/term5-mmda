@@ -6,5 +6,7 @@
 #include "MDAA/Assert.h"
 #include "MDAA/Macro.h"
 #include "MDAA/Random.h"
+#include "MDAA/RandomSpdMatrix.h"
+#include "MDAA/RandomVectorSet.h"
 #include "MDAA/Timer.h"
 #include "MDAA/Types.h"

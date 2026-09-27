@@ -4,6 +4,7 @@
 #include <limits>
 #include <print>
 #include <thread>
+#include <vector>
 
 namespace {
 
@@ -11,12 +12,13 @@ using MDAA::f64;
 using MDAA::i32;
 using MDAA::u32;
 using MDAA::u64;
+using MDAA::usize;
 
 using Vector = Eigen::VectorXd;
 using Matrix = Eigen::MatrixXd;
 
 constexpr i32 VectorCount = 1'000'000;
-constexpr i32 Dimension = 10;
+constexpr i32 Dimension = 2;
 constexpr i32 HalfPower = 2;
 constexpr f64 ComponentMin = -1.0;
 constexpr f64 ComponentMax = 1.0;
@@ -68,18 +70,15 @@ struct Norms final {
 Matrix CreateRandomSPDMatrix(i32 n, u64 seed) {
     MDAA_CHECKF(n > 0, "a matrix needs a positive size, got n = {}", n);
 
-    MDAA::Random random(seed);
+    std::vector<f64> storage(static_cast<usize>(n) * static_cast<usize>(n));
+    MDAA::FillRandomSpdMatrix(
+        {.Seed = seed,
+         .Size = n,
+         .ComponentMin = ComponentMin,
+         .ComponentMax = ComponentMax},
+        storage);
 
-    Matrix basis(n, n);
-    for (i32 row = 0; row < n; row++) {
-        for (i32 column = 0; column < n; column++) {
-            basis(row, column) = random.Uniform(ComponentMin, ComponentMax);
-        }
-    }
-
-    Matrix a = basis * basis.transpose();
-    a.diagonal().array() += static_cast<f64>(n);
-
+    const Matrix a = Eigen::Map<const Matrix, Eigen::RowMajor>(storage.data(), n, n);
     MDAA_CHECKF(a.isApprox(a.transpose()), "M * transpose(M) + n * I has to stay symmetric");
     return a;
 }
@@ -94,13 +93,20 @@ void Scan(i32 begin, i32 end, const Matrix &a, Norms &norms) {
         a.rows(),
         a.cols());
 
-    MDAA::Random random(Seed + static_cast<u64>(begin));
-    Vector       x = Vector::Zero(Dimension);
+    std::vector<f64> block(static_cast<usize>(end - begin) * static_cast<usize>(Dimension));
+    MDAA::FillUniformVectorBlock(
+        {.Seed = Seed,
+         .First = begin,
+         .Count = end - begin,
+         .Dimension = Dimension,
+         .ComponentMin = ComponentMin,
+         .ComponentMax = ComponentMax},
+        block);
 
     for (i32 index = begin; index < end; index++) {
-        for (f64 &value : x) {
-            value = random.Uniform(ComponentMin, ComponentMax);
-        }
+        const Vector x = Eigen::Map<const Vector>(
+            block.data() + (static_cast<usize>(index - begin) * static_cast<usize>(Dimension)),
+            Dimension);
 
         norms.Infinity.Add(x.cwiseAbs().maxCoeff(), x);
         norms.L1.Add(x.lpNorm<1>(), x);
@@ -147,7 +153,7 @@ int main() {
     PrintMatrix("A", a);
     std::println();
 
-    const i32 threadCount = static_cast<i32>(std::max(u32(1), std::thread::hardware_concurrency()));
+    const i32 threadCount = static_cast<i32>(std::max(static_cast<u32>(1), std::thread::hardware_concurrency()));
     const i32 blockSize = (VectorCount + threadCount - 1) / threadCount;
 
     MDAA::Timer timer;
