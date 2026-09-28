@@ -1,7 +1,7 @@
 // Lab NN - <title>
 //
 // One line on what the assignment asks for. The shared code from Source/ is
-// available here, it comes in as a single precompiled include
+// available here, include the headers you use directly
 
 #include <print>
 

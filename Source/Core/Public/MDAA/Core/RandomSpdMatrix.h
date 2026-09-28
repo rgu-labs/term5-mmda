@@ -1,8 +1,8 @@
 #pragma once
 
-#include "MDAA/Assert.h"
-#include "MDAA/Random.h"
-#include "MDAA/Types.h"
+#include "MDAA/Core/Assert.h"
+#include "MDAA/Core/Random.h"
+#include "MDAA/Core/Types.h"
 
 #include <span>
 #include <vector>

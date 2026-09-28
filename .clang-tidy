@@ -1,7 +1,7 @@
 ---
-# misc-include-cleaner is off: the shared code is pulled into a lab as the
-# single precompiled umbrella header MDAA/MDAA.h, and that check demands a
-# direct include for every symbol that is used.
+# misc-include-cleaner stays off: the labs take the whole shared code as one
+# precompiled umbrella header, so a symbol may be used long before anyone has
+# written down which header it came from.
 # The bounds check is off for the same reason as the two pro-bounds entries
 # below: the labs index flat buffers with index arithmetic on purpose
 Checks: >

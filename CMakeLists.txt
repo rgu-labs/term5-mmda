@@ -9,6 +9,7 @@ include(CMake/build_type.cmake)
 
 include(CMake/logging.cmake)
 include(CMake/mdaa_executable.cmake)
+include(CMake/mdaa_module.cmake)
 
 include(Dependencies/Eigen.cmake)
 

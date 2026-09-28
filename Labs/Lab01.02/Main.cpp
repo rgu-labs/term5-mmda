@@ -1,48 +1,55 @@
+#include "MDAA/Core/Assert.h"
+#include "MDAA/Core/Parallel.h"
+#include "MDAA/Core/Random.h"
+#include "MDAA/Core/RandomSpdMatrix.h"
+#include "MDAA/Core/RandomVectorSet.h"
+#include "MDAA/Core/Sphere.h"
+#include "MDAA/Core/Timer.h"
+#include "MDAA/Core/Types.h"
+#include "MDAA/LinearAlgebra/Matrix.h"
+#include "MDAA/LinearAlgebra/PointSet.h"
+
 #include <Eigen/Core>
 #include <Eigen/Eigenvalues>
 
 #include <algorithm>
 #include <array>
-#include <charconv>
 #include <cmath>
+#include <format>
 #include <limits>
 #include <numbers>
 #include <queue>
-#include <span>
-#include <string_view>
-#include <system_error>
-#include <thread>
-#include <utility>
 #include <vector>
 
 namespace {
 
 using MDAA::f64;
 using MDAA::i32;
+using MDAA::RunParallel;
+using MDAA::Sphere;
+using MDAA::ThreadCount;
 using MDAA::u32;
 using MDAA::u64;
 using MDAA::u8;
 using MDAA::usize;
 
-using Vector = Eigen::Vector2d;
-using Matrix = Eigen::Matrix2d;
-using PointMatrix = Eigen::Matrix<f64, 2, Eigen::Dynamic>;
-
 constexpr i32 VectorCount = 1'000'000;
-constexpr i32 Dimension = 2;
+constexpr i32 Dimension = 3;
 constexpr f64 ComponentMin = -1.0;
 constexpr f64 ComponentMax = 1.0;
 constexpr f64 LambdaMin = 0.5;
 constexpr f64 LambdaMax = 2.0;
 constexpr u64 Seed = 88005553535;
 constexpr u64 CrossCheckSeed = 0x5DEECE66DULL;
-constexpr f64 DefaultTolerance = 1.0e-9;
-constexpr f64 WindowSlack = 1.0e-6;
-constexpr f64 WindowFloor = 1.0e-15;
+constexpr f64 Tolerance = 1.0e-9;
+constexpr f64 ShellSlack = 1.0e-12;
 constexpr i32 BestPairCount = 10;
 constexpr i32 CrossCheckPairs = 100'000;
+constexpr i32 LeafSize = 16;
 
-constexpr f64 TwoPi = 2.0 * std::numbers::pi;
+using Vector = MDAA::ColumnVector<Dimension>;
+using Matrix = MDAA::SquareMatrix<Dimension>;
+using PointMatrix = MDAA::PointMatrix<Dimension>;
 
 constexpr std::array<f64, 4> TargetAngles = {
     std::numbers::pi / 6.0,
@@ -115,46 +122,13 @@ struct AngleStats final {
     }
 };
 
-struct Directions final {
-    std::vector<f64> ByIndex;
-    std::vector<f64> Sorted;
-    std::vector<u32> Order;
-};
-
-i32 ThreadCount() {
-    return static_cast<i32>(std::max(static_cast<u32>(1), std::thread::hardware_concurrency()));
-}
-
-f64 ParseTolerance(i32 argc, char **argv) {
-    if (argc == 1) {
-        return DefaultTolerance;
-    }
-    MDAA_CHECKF(argc == 2, "the only argument is the tolerance in radians, got {} arguments", argc - 1);
-
-    const std::string_view text = argv[1];
-    f64                    tolerance = 0.0;
-    const auto             result = std::from_chars(text.data(), text.data() + text.size(), tolerance);
-    MDAA_CHECKF(
-        result.ec == std::errc() && result.ptr == text.data() + text.size() && tolerance > 0.0,
-        "'{}' is not a positive tolerance in radians",
-        text);
-    return tolerance;
-}
-
-f64 NormalizeAngle(f64 angle) {
-    f64 normalized = std::fmod(angle, TwoPi);
-    if (normalized < 0.0) {
-        normalized += TwoPi;
-    }
-    return normalized;
-}
-
 f64 AngleBetween(const Vector &x, const Vector &y) {
-    return std::atan2(std::abs((x.x() * y.y()) - (x.y() * y.x())), x.dot(y));
+    const f64 cosine = std::clamp(x.dot(y), -1.0, 1.0);
+    return std::atan2(std::sqrt(std::max(0.0, 1.0 - (cosine * cosine))), cosine);
 }
 
 f64 CosineByTransform(const Vector &x, const Vector &y) {
-    return std::clamp(x.dot(y) / (x.norm() * y.norm()), -1.0, 1.0);
+    return std::cos(AngleBetween(x, y));
 }
 
 f64 CosineByDot(const Vector &x, const Vector &y) {
@@ -202,142 +176,91 @@ const char *ProductLabel(Product product) {
     return "";
 }
 
-void GenerateVectors(std::span<f64> storage) {
-    const i32 threadCount = ThreadCount();
-    const i32 blockSize = (VectorCount + threadCount - 1) / threadCount;
-
-    std::vector<std::jthread> workers;
-    workers.reserve(threadCount);
-    for (i32 t = 0; t < threadCount; t++) {
-        const i32 begin = std::min(t * blockSize, VectorCount);
-        const i32 end = std::min(begin + blockSize, VectorCount);
-        workers.emplace_back([storage, begin, end] {
-            MDAA::FillUniformVectorBlock(
-                {.Seed = Seed,
-                 .First = begin,
-                 .Count = end - begin,
-                 .Dimension = Dimension,
-                 .ComponentMin = ComponentMin,
-                 .ComponentMax = ComponentMax},
-                storage.subspan(
-                    static_cast<usize>(begin) * static_cast<usize>(Dimension),
-                    static_cast<usize>(end - begin) * static_cast<usize>(Dimension)));
+void SearchChunk(
+    const Sphere<Dimension> &sphere,
+    f64                      target,
+    f64                      tolerance,
+    usize                    begin,
+    usize                    end,
+    AngleStats              &stats) {
+    for (usize position = begin; position < end; position++) {
+        const u32                  origin = static_cast<u32>(position);
+        const std::span<const f64> query = sphere.Point(origin);
+        sphere.ForEachInShell(query, target, tolerance, ShellSlack, [&](u32 other) {
+            if (other <= origin) {
+                return;
+            }
+            const f64 angle = Sphere<Dimension>::AngleBetween(query, sphere.Point(other));
+            const f64 deviation = std::abs(angle - target);
+            if (deviation > tolerance) {
+                return;
+            }
+            stats.Observe(
+                {.Left = origin,
+                 .Right = other,
+                 .Angle = angle,
+                 .Deviation = deviation});
         });
     }
-    for (std::jthread &worker : workers) {
-        worker.join();
-    }
 }
 
-Directions MakeDirections(const PointMatrix &points) {
-    Directions dirs;
-    dirs.ByIndex.resize(VectorCount);
-    dirs.Sorted.resize(VectorCount);
-    dirs.Order.resize(VectorCount);
-
-    std::vector<std::pair<f64, u32>> entries;
-    entries.reserve(VectorCount);
-    for (i32 index = 0; index < VectorCount; index++) {
-        const Vector point = points.col(static_cast<Eigen::Index>(index));
-        dirs.ByIndex[index] = NormalizeAngle(std::atan2(point.y(), point.x()));
-        entries.emplace_back(dirs.ByIndex[index], static_cast<u32>(index));
-    }
-
-    std::ranges::sort(entries);
-    for (usize position = 0; position < entries.size(); position++) {
-        dirs.Sorted[position] = entries[position].first;
-        dirs.Order[position] = entries[position].second;
-    }
-    return dirs;
-}
-
-template <typename Visitor>
-void ForEachInRange(const Directions &dirs, f64 low, f64 high, const Visitor &visit) {
-    const auto first = std::ranges::lower_bound(dirs.Sorted, low);
-    for (auto current = first; current != dirs.Sorted.end() && *current < high; current++) {
-        visit(static_cast<u32>(current - dirs.Sorted.begin()));
-    }
-}
-
-template <typename Visitor>
-void ForEachInWindow(const Directions &dirs, f64 center, f64 window, const Visitor &visit) {
-    const f64 low = center - window;
-    const f64 high = center + window;
-    if (low < 0.0) {
-        ForEachInRange(dirs, low + TwoPi, TwoPi, visit);
-        ForEachInRange(dirs, 0.0, high, visit);
-    } else if (high > TwoPi) {
-        ForEachInRange(dirs, low, TwoPi, visit);
-        ForEachInRange(dirs, 0.0, high - TwoPi, visit);
-    } else {
-        ForEachInRange(dirs, low, high, visit);
-    }
-}
-
-void SearchChunk(
-    const PointMatrix &points,
-    const Directions  &dirs,
-    f64                target,
-    f64                tolerance,
-    f64                window,
-    usize              begin,
-    usize              end,
-    AngleStats        &stats) {
-    for (usize index = begin; index < end; index++) {
-        const Vector point = points.col(static_cast<Eigen::Index>(index));
-        const f64    phi = dirs.ByIndex[index];
-        for (i32 sign = -1; sign <= 1; sign += 2) {
-            const f64 center = NormalizeAngle(phi + (static_cast<f64>(sign) * target));
-            ForEachInWindow(dirs, center, window, [&](u32 position) {
-                const u32 other = dirs.Order[position];
-                if (other <= static_cast<u32>(index)) {
-                    return;
-                }
-                const f64 angle = AngleBetween(point, points.col(other));
-                const f64 deviation = std::abs(angle - target);
-                if (deviation > tolerance) {
-                    return;
-                }
-                stats.Observe(
-                    {.Left = static_cast<u32>(index),
-                     .Right = other,
-                     .Angle = angle,
-                     .Deviation = deviation});
-            });
+u64 CountByBruteForce(const Sphere<Dimension> &sphere, u32 origin, f64 target, f64 tolerance) {
+    u64                        count = 0;
+    const std::span<const f64> query = sphere.Point(origin);
+    for (u32 other = origin + 1; other < sphere.Size(); other++) {
+        const f64 angle = Sphere<Dimension>::AngleBetween(query, sphere.Point(other));
+        if (std::abs(angle - target) <= tolerance) {
+            ++count;
         }
     }
+    return count;
 }
 
-AngleStats SearchAngle(const PointMatrix &points, const Directions &dirs, f64 target, f64 tolerance) {
-    const f64 window = (tolerance * (1.0 + WindowSlack)) + WindowFloor;
+void CheckCompleteness(const Sphere<Dimension> &sphere) {
+    constexpr usize samples = 200;
+    constexpr f64   testTolerance = 1.0e-3;
 
-    const i32 threadCount = ThreadCount();
-    const i32 chunkSize = (VectorCount + threadCount - 1) / threadCount;
+    const auto stride = static_cast<u32>(sphere.Size() / samples);
+    const auto checks = TargetAngles.size() * samples;
 
-    std::vector<AngleStats>   blocks(threadCount);
-    std::vector<std::jthread> workers;
-    workers.reserve(threadCount);
-    for (i32 t = 0; t < threadCount; t++) {
-        const i32 begin = std::min(t * chunkSize, VectorCount);
-        const i32 end = std::min(begin + chunkSize, VectorCount);
-        workers.emplace_back([&blocks, &points, &dirs, target, tolerance, window, begin, end, t] {
-            SearchChunk(
-                points,
-                dirs,
-                target,
-                tolerance,
-                window,
-                static_cast<usize>(begin),
-                static_cast<usize>(end),
-                blocks[t]);
+    MDAA_CHECKF(stride > 0, "the dataset holds {} vectors, the check needs more", sphere.Size());
+
+    RunParallel(
+        "verify against brute force",
+        static_cast<u64>(checks),
+        [&sphere, stride, testTolerance](i32, usize position) {
+            const auto which = position / samples;
+            const auto sample = position % samples;
+            const f64  target = TargetAngles[which];
+            const u32  origin = static_cast<u32>(sample) * stride;
+
+            AngleStats stats;
+            SearchChunk(sphere, target, testTolerance, origin, origin + 1, stats);
+
+            const u64 expected = CountByBruteForce(sphere, origin, target, testTolerance);
+            MDAA_CHECKF(
+                stats.Count == expected,
+                "the tree found {} pairs for i = {}, brute force found {}, theta = {}",
+                stats.Count,
+                origin,
+                expected,
+                target);
         });
-    }
-    for (std::jthread &worker : workers) {
-        worker.join();
-    }
+}
+
+AngleStats SearchAngle(const Sphere<Dimension> &sphere, f64 target, f64 tolerance, const char *name) {
+    const u32 threadCount = ThreadCount();
+
+    std::vector<AngleStats> blocks(threadCount);
+    RunParallel(
+        std::format("search theta = {}", name),
+        static_cast<u64>(VectorCount),
+        [&blocks, &sphere, target, tolerance](i32 t, usize position) {
+            SearchChunk(sphere, target, tolerance, position, position + 1, blocks[t]);
+        });
 
     AngleStats stats = blocks.front();
-    for (i32 t = 1; t < threadCount; t++) {
+    for (u32 t = 1; t < threadCount; t++) {
         stats.Merge(blocks[t]);
     }
     return stats;
@@ -406,7 +329,11 @@ CrossCheck RunCrossCheck(
 }
 
 void PrintVector(const char *label, const Vector &vector) {
-    std::println("        {} = [{:13.8f}, {:13.8f}]", label, vector.x(), vector.y());
+    std::print("        {} = [", label);
+    for (i32 d = 0; d < Dimension; d++) {
+        std::print("{}{:13.8f}", d == 0 ? "" : ", ", vector[d]);
+    }
+    std::println("]");
 }
 
 void PrintMatrix(const char *label, const Matrix &matrix) {
@@ -430,18 +357,21 @@ void ReportProduct(
     timer.Start();
 
     const PointMatrix points = transform * vectors;
-    MDAA_CHECKF(
-        points.cwiseAbs().minCoeff() > 0.0,
-        "a vector turned into a zero vector and lost its direction");
 
-    const Directions dirs = MakeDirections(points);
+    Sphere<Dimension> sphere;
+    sphere.Build(
+        {points.data(), static_cast<usize>(points.size())},
+        VectorCount,
+        LeafSize);
+    CheckCompleteness(sphere);
 
     std::array<AngleStats, TargetAngles.size()> stats;
     std::array<f64, TargetAngles.size()>        seconds {};
     for (usize target = 0; target < TargetAngles.size(); target++) {
         MDAA::Timer angleTimer;
         angleTimer.Start();
-        stats[target] = SearchAngle(points, dirs, TargetAngles[target], tolerance);
+        stats[target] =
+            SearchAngle(sphere, TargetAngles[target], tolerance, TargetNames[target]);
         angleTimer.Stop();
         seconds[target] = angleTimer.ElapsedSeconds();
     }
@@ -504,25 +434,28 @@ void ReportProduct(
 
 } // namespace
 
-int main(i32 argc, char **argv) {
+int main() {
     Eigen::setNbThreads(1);
-    MDAA_CHECKF(
-        Dimension == 2,
-        "the search sweeps the directions of a plane, it needs N = 2, got N = {}",
-        Dimension);
 
-    const f64 tolerance = ParseTolerance(argc, argv);
-    const i32 threadCount = ThreadCount();
+    const f64 tolerance = Tolerance;
+    const u32 threadCount = ThreadCount();
 
     std::vector<f64> storage(static_cast<usize>(VectorCount) * static_cast<usize>(Dimension));
     MDAA::Timer      generation;
     generation.Start();
-    GenerateVectors(storage);
+    MDAA::FillUniformVectorSet(
+        {.Seed = Seed,
+         .First = 0,
+         .Count = VectorCount,
+         .Dimension = Dimension,
+         .ComponentMin = ComponentMin,
+         .ComponentMax = ComponentMax},
+        storage);
     generation.Stop();
 
     const Eigen::Map<const PointMatrix> vectors(storage.data(), Dimension, VectorCount);
     MDAA_CHECKF(
-        vectors.cwiseAbs().minCoeff() > 0.0,
+        vectors.colwise().norm().minCoeff() > 0.0,
         "a null vector of the dataset has no direction, there is one");
 
     MDAA::Random               random(Seed);
@@ -531,13 +464,9 @@ int main(i32 argc, char **argv) {
         weight = random.Uniform(LambdaMin, LambdaMax);
     }
     const Vector lambda = Vector::Map(weights.data());
-    MDAA_CHECKF(
-        lambda.minCoeff() > 0.0,
-        "the weights of Lambda have to be positive, the smallest is {}",
-        lambda.minCoeff());
+    const Matrix lambdaRoot = MDAA::DiagonalSquareRoot(lambda);
 
-    constexpr usize               matrixValues = static_cast<usize>(Dimension) * static_cast<usize>(Dimension);
-    std::array<f64, matrixValues> matrixStorage {};
+    std::array<f64, static_cast<usize>(Dimension) * static_cast<usize>(Dimension)> matrixStorage {};
     MDAA::FillRandomSpdMatrix(
         {.Seed = Seed,
          .Size = Dimension,
@@ -545,21 +474,8 @@ int main(i32 argc, char **argv) {
          .ComponentMax = ComponentMax},
         matrixStorage);
     const Matrix a = Eigen::Map<const Matrix, Eigen::RowMajor>(matrixStorage.data());
-    MDAA_CHECKF(a.isApprox(a.transpose()), "M * transpose(M) + n * I has to stay symmetric");
 
-    const Eigen::SelfAdjointEigenSolver<Matrix> solver(a);
-    MDAA_CHECKF(solver.info() == Eigen::Success, "the eigen decomposition of A failed");
-    const Vector &eigenvalues = solver.eigenvalues();
-    MDAA_CHECKF(
-        eigenvalues.minCoeff() > 0.0,
-        "A has to be positive definite, the smallest eigenvalue is {}",
-        eigenvalues.minCoeff());
-    const Matrix root = solver.eigenvectors() * eigenvalues.array().sqrt().matrix().asDiagonal() *
-                        solver.eigenvectors().transpose();
-    MDAA_CHECKF(
-        (root.transpose() * root - a).norm() < 1.0e-9,
-        "A^1/2 squared has to be A, the gap is {}",
-        (root.transpose() * root - a).norm());
+    const Matrix root = MDAA::SpdMatrixRoot(a);
 
     std::println("Lab01.02");
     std::println(
@@ -584,7 +500,7 @@ int main(i32 argc, char **argv) {
     const AngleContext          context {.Weights = lambda, .Positive = a};
     const std::array<Matrix, 3> transforms = {
         Matrix::Identity(),
-        Matrix(Vector(lambda.array().sqrt()).asDiagonal()),
+        lambdaRoot,
         root,
     };
     const std::array<Product, 3> products = {Product::Euclidean, Product::Lambda, Product::MatrixA};

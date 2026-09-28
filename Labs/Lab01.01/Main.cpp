@@ -1,16 +1,23 @@
+#include "MDAA/Core/Assert.h"
+#include "MDAA/Core/Parallel.h"
+#include "MDAA/Core/RandomSpdMatrix.h"
+#include "MDAA/Core/RandomVectorSet.h"
+#include "MDAA/Core/Timer.h"
+#include "MDAA/Core/Types.h"
+
 #include <Eigen/Core>
 
 #include <algorithm>
 #include <limits>
 #include <print>
-#include <thread>
 #include <vector>
 
 namespace {
 
 using MDAA::f64;
 using MDAA::i32;
-using MDAA::u32;
+using MDAA::RunChunks;
+using MDAA::ThreadCount;
 using MDAA::u64;
 using MDAA::usize;
 
@@ -153,27 +160,22 @@ int main() {
     PrintMatrix("A", a);
     std::println();
 
-    const i32 threadCount = static_cast<i32>(std::max(static_cast<u32>(1), std::thread::hardware_concurrency()));
+    const i32 threadCount = static_cast<i32>(ThreadCount());
     const i32 blockSize = (VectorCount + threadCount - 1) / threadCount;
 
     MDAA::Timer timer;
     timer.Start();
 
-    std::vector<Norms>        blocks(threadCount);
-    std::vector<std::jthread> workers;
-    workers.reserve(threadCount);
-    for (i32 t = 0; t < threadCount; t++) {
-        const i32 begin = std::min(t * blockSize, VectorCount);
+    std::vector<Norms> chunks(threadCount);
+    RunChunks("scanning", threadCount, [&](i32, i32 chunkIndex) {
+        const i32 begin = std::min(chunkIndex * blockSize, VectorCount);
         const i32 end = std::min(begin + blockSize, VectorCount);
-        workers.emplace_back([&blocks, &a, t, begin, end] { Scan(begin, end, a, blocks[t]); });
-    }
-    for (std::jthread &worker : workers) {
-        worker.join();
-    }
+        Scan(begin, end, a, chunks[chunkIndex]);
+    });
 
-    Norms norms = blocks.front();
-    for (i32 t = 1; t < threadCount; t++) {
-        norms.Merge(blocks[t]);
+    Norms norms = chunks.front();
+    for (usize chunk = 1; chunk < chunks.size(); chunk++) {
+        norms.Merge(chunks[chunk]);
     }
 
     timer.Stop();

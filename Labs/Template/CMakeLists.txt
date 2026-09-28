@@ -3,5 +3,5 @@ mdaa_executable(
     SOURCES
         Main.cpp
     DEPS
-        MDAA::Common
+        MDAA::Core
 )

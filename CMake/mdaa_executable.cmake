@@ -1,4 +1,3 @@
-# Declares a standalone executable, every lab is built with this
 function(mdaa_executable)
     set(options)
     set(oneValueArgs NAME)
@@ -9,11 +8,11 @@ function(mdaa_executable)
 
     if (NOT EXE_NAME)
         message(FATAL_ERROR "mdaa_executable: NAME is required.")
-    endif()
+    endif ()
 
     if (NOT EXE_SOURCES)
         message(FATAL_ERROR "mdaa_executable: SOURCES is required.")
-    endif()
+    endif ()
 
     set_property(GLOBAL APPEND PROPERTY MDAA_EXECUTABLES ${EXE_NAME})
 
@@ -33,6 +32,6 @@ function(mdaa_executable)
 
     if (EXE_DEPS)
         target_link_libraries(${EXE_NAME} PRIVATE ${EXE_DEPS})
-    endif()
+    endif ()
 
 endfunction()
