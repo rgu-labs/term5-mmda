@@ -1,7 +1,6 @@
 #pragma once
 
 #include "MDAA/Core/Types.h"
-#include "MDAA/LinearAlgebra/Matrix.h"
 
 #include <Eigen/Core>
 
