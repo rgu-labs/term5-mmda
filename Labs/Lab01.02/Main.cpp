@@ -228,7 +228,7 @@ void CheckCompleteness(const Sphere<Dimension> &sphere) {
     RunParallel(
         "verify against brute force",
         static_cast<u64>(checks),
-        [&sphere, stride, testTolerance](i32, usize position) {
+        [&sphere, stride](i32, usize position) {
             const auto which = position / samples;
             const auto sample = position % samples;
             const f64  target = TargetAngles[which];

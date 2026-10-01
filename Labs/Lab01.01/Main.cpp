@@ -25,7 +25,7 @@ using Vector = Eigen::VectorXd;
 using Matrix = Eigen::MatrixXd;
 
 constexpr i32 VectorCount = 1'000'000;
-constexpr i32 Dimension = 2;
+constexpr i32 Dimension = 10;
 constexpr i32 HalfPower = 2;
 constexpr f64 ComponentMin = -1.0;
 constexpr f64 ComponentMax = 1.0;
