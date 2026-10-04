@@ -9,7 +9,7 @@ DIR_DEV := $(BUILD_ROOT)/Development
 
 # Lab to run, e.g. make run lab=Lab01
 lab ?= Lab01
-LAB_ARGS ?=
+ARGS ?=
 
 .DEFAULT_GOAL := build
 
@@ -23,7 +23,7 @@ help:
 	@echo 'make build-debug              build Debug'
 	@echo 'make run lab=Lab01            build Development and run Lab01'
 	@echo 'make run-debug lab=Lab01      build Debug and run Lab01'
-	@echo 'make run lab=Lab01 LAB_ARGS=  pass arguments to the lab'
+	@echo 'make run lab=Lab01 ARGS=  pass arguments to the lab'
 	@echo 'make list                     list available labs'
 	@echo 'make format                   clang-format every tracked source file'
 	@echo 'make tidy                     clang-tidy every tracked source file'
@@ -72,7 +72,7 @@ _run:
 		exit 1; \
 	fi; \
 	echo '> running $(lab)'; \
-	./$(DIR)/Target/$(lab) $(LAB_ARGS)
+	./$(DIR)/Target/$(lab) $(ARGS)
 
 list:
 	@ls -d Labs/Lab*/ 2>/dev/null | sed 's:/$$::' || echo 'no labs yet'
