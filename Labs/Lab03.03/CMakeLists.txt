@@ -1,0 +1,10 @@
+mdaa_executable(
+  NAME
+    Lab03.03
+  SOURCES
+    Main.cpp
+  DEPS
+    MDAA::Core
+    MDAA::Optimization
+    MDAA::Eigen
+)

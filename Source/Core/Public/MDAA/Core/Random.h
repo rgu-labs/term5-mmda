@@ -35,7 +35,8 @@ class Random final {
         } else {
             std::uniform_int_distribution<T> dist {
                 std::numeric_limits<T>::lowest(),
-                std::numeric_limits<T>::max()};
+                std::numeric_limits<T>::max(),
+            };
             return dist(m_Engine);
         }
     }

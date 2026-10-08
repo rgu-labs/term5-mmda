@@ -62,7 +62,8 @@ constexpr std::array<const char *, 4> TargetNames = {"pi/6", "pi/4", "pi/3", "pi
 
 enum class Product : u8 { Euclidean,
                           Lambda,
-                          MatrixA };
+                          MatrixA,
+};
 
 struct AngleContext final {
     Vector Weights = Vector::Ones();
@@ -122,17 +123,17 @@ struct AngleStats final {
     }
 };
 
+f64 CosineByDot(const Vector &x, const Vector &y) {
+    return std::clamp(x.dot(y) / (x.norm() * y.norm()), -1.0, 1.0);
+}
+
 f64 AngleBetween(const Vector &x, const Vector &y) {
-    const f64 cosine = std::clamp(x.dot(y), -1.0, 1.0);
+    const f64 cosine = CosineByDot(x, y);
     return std::atan2(std::sqrt(std::max(0.0, 1.0 - (cosine * cosine))), cosine);
 }
 
 f64 CosineByTransform(const Vector &x, const Vector &y) {
     return std::cos(AngleBetween(x, y));
-}
-
-f64 CosineByDot(const Vector &x, const Vector &y) {
-    return std::clamp(x.dot(y) / (x.norm() * y.norm()), -1.0, 1.0);
 }
 
 f64 CosineByWeights(const Vector &x, const Vector &y, const Vector &weights) {
@@ -196,10 +197,12 @@ void SearchChunk(
                 return;
             }
             stats.Observe(
-                {.Left = origin,
-                 .Right = other,
-                 .Angle = angle,
-                 .Deviation = deviation});
+                {
+                    .Left = origin,
+                    .Right = other,
+                    .Angle = angle,
+                    .Deviation = deviation,
+                });
         });
     }
 }
@@ -444,12 +447,14 @@ int main() {
     MDAA::Timer      generation;
     generation.Start();
     MDAA::FillUniformVectorSet(
-        {.Seed = Seed,
-         .First = 0,
-         .Count = VectorCount,
-         .Dimension = Dimension,
-         .ComponentMin = ComponentMin,
-         .ComponentMax = ComponentMax},
+        {
+            .Seed = Seed,
+            .First = 0,
+            .Count = VectorCount,
+            .Dimension = Dimension,
+            .ComponentMin = ComponentMin,
+            .ComponentMax = ComponentMax,
+        },
         storage);
     generation.Stop();
 
@@ -468,10 +473,12 @@ int main() {
 
     std::array<f64, static_cast<usize>(Dimension) * static_cast<usize>(Dimension)> matrixStorage {};
     MDAA::FillRandomSpdMatrix(
-        {.Seed = Seed,
-         .Size = Dimension,
-         .ComponentMin = ComponentMin,
-         .ComponentMax = ComponentMax},
+        {
+            .Seed = Seed,
+            .Size = Dimension,
+            .ComponentMin = ComponentMin,
+            .ComponentMax = ComponentMax,
+        },
         matrixStorage);
     const Matrix a = Eigen::Map<const Matrix, Eigen::RowMajor>(matrixStorage.data());
 

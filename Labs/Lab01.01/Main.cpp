@@ -79,10 +79,12 @@ Matrix CreateRandomSPDMatrix(i32 n, u64 seed) {
 
     std::vector<f64> storage(static_cast<usize>(n) * static_cast<usize>(n));
     MDAA::FillRandomSpdMatrix(
-        {.Seed = seed,
-         .Size = n,
-         .ComponentMin = ComponentMin,
-         .ComponentMax = ComponentMax},
+        {
+            .Seed = seed,
+            .Size = n,
+            .ComponentMin = ComponentMin,
+            .ComponentMax = ComponentMax,
+        },
         storage);
 
     const Matrix a = Eigen::Map<const Matrix, Eigen::RowMajor>(storage.data(), n, n);
@@ -102,12 +104,14 @@ void Scan(i32 begin, i32 end, const Matrix &a, Norms &norms) {
 
     std::vector<f64> block(static_cast<usize>(end - begin) * static_cast<usize>(Dimension));
     MDAA::FillUniformVectorBlock(
-        {.Seed = Seed,
-         .First = begin,
-         .Count = end - begin,
-         .Dimension = Dimension,
-         .ComponentMin = ComponentMin,
-         .ComponentMax = ComponentMax},
+        {
+            .Seed = Seed,
+            .First = begin,
+            .Count = end - begin,
+            .Dimension = Dimension,
+            .ComponentMin = ComponentMin,
+            .ComponentMax = ComponentMax,
+        },
         block);
 
     for (i32 index = begin; index < end; index++) {

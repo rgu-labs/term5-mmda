@@ -2,18 +2,13 @@
 
 #include "MDAA/Core/Types.h"
 #include "MDAA/Optimization/Objective.h"
+#include "MDAA/Optimization/StopReason.h"
 
 #include <Eigen/Core>
 
 #include <functional>
 
 namespace MDAA {
-
-enum class StopReason : u8 {
-    Accuracy,
-    Iterations,
-    Stationary,
-};
 
 struct SteepestDescentOptions final {
     i32 MaxIterations;

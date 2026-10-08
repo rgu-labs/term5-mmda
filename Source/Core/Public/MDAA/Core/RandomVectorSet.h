@@ -74,12 +74,14 @@ inline void FillUniformVectorSet(const UniformVectorBlock &block, std::span<f64>
     const auto width = static_cast<usize>(block.Dimension);
     RunParallel("generate vectors", static_cast<u64>(block.Count), [block, out, width](i32, usize position) {
         FillUniformVectorBlock(
-            {.Seed = block.Seed,
-             .First = block.First + static_cast<i32>(position),
-             .Count = 1,
-             .Dimension = block.Dimension,
-             .ComponentMin = block.ComponentMin,
-             .ComponentMax = block.ComponentMax},
+            {
+                .Seed = block.Seed,
+                .First = block.First + static_cast<i32>(position),
+                .Count = 1,
+                .Dimension = block.Dimension,
+                .ComponentMin = block.ComponentMin,
+                .ComponentMax = block.ComponentMax,
+            },
             out.subspan(position * width, width));
     });
 }
