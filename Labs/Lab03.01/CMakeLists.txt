@@ -1,0 +1,10 @@
+mdaa_executable(
+  NAME
+    Lab03.01
+  SOURCES
+    Main.cpp
+  DEPS
+    MDAA::Core
+    MDAA::LinearAlgebra
+    MDAA::Eigen
+)
