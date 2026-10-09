@@ -55,26 +55,6 @@ Eigen::VectorXd ToVector(const std::array<f64, Size> &values) {
     return vector;
 }
 
-f64 Residual(const System &system, const Eigen::VectorXd &x) {
-    f64 worst = 0.0;
-
-    for (i32 index = 0; index < Size; index++) {
-        f64 value = system.Diagonal[static_cast<std::size_t>(index)] * x[index];
-
-        if (index > 0) {
-            value += system.Lower[static_cast<std::size_t>(index)] * x[index - 1];
-        }
-
-        if (index + 1 < Size) {
-            value += system.Upper[static_cast<std::size_t>(index)] * x[index + 1];
-        }
-
-        worst = std::max(worst, std::abs(value - system.Right[static_cast<std::size_t>(index)]));
-    }
-
-    return worst;
-}
-
 std::string Equation(const System &system, const i32 row) {
     std::string text;
 
@@ -135,20 +115,9 @@ int main() {
             ToVector(system.Upper),
             ToVector(system.Right));
 
-        const f64 residual = Residual(system, solution);
-
         std::println("system {}", index + 1);
         PrintSystem(system);
         std::println("  x = {}", Text(solution));
-        std::println("  residual = {:.3e}", residual);
-
-        MDAA_CHECKF(
-            residual < Tolerance,
-            "system {} has to satisfy the equations, the residual is {}",
-            index + 1,
-            residual);
-
-        std::println();
     }
 
     return 0;

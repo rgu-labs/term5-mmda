@@ -456,11 +456,11 @@ int main(const int argc, char *const *argv) {
     const Settings settings = ParseSettings(argc, argv);
 
     Eigen::MatrixXd a(Size, Size);
-    a << 4, -1, 0, -1, 0, 0, //
-        -1, 4, -1, 0, -1, 0, //
-        0, -1, 4, 0, 0, -1,  //
-        -1, 0, 0, 4, -1, 0,  //
-        0, -1, 0, -1, 4, -1, //
+    a << 4, -1, 0, -1, 0, 0,
+        -1, 4, -1, 0, -1, 0,
+        0, -1, 4, 0, 0, -1,
+        -1, 0, 0, 4, -1, 0,
+        0, -1, 0, -1, 4, -1,
         0, 0, -1, 0, -1, 4;
 
     Eigen::VectorXd f(Size);
