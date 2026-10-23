@@ -11,10 +11,16 @@ import numpy as np
 
 
 def least_squares(x, y, columns):
-    matrix = np.column_stack(columns)
-    coefficients, *_ = np.linalg.lstsq(matrix, y, rcond=None)
-    residual = y - matrix @ coefficients
+    x = np.column_stack(columns)
+
+    xtx = x.T @ x
+    xty = x.T @ y
+
+    coefficients = np.linalg.solve(xtx, xty)
+
+    residual = y - x @ coefficients
     rmse = np.sqrt(np.mean(residual**2))
+
     return coefficients, rmse
 
 
@@ -60,11 +66,45 @@ def task_7():
 
 def task_8():
     x = np.array(
-        [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0],
+        [
+            0.5,
+            1.0,
+            1.5,
+            2.0,
+            2.5,
+            3.0,
+            3.5,
+            4.0,
+            4.5,
+            5.0,
+            5.5,
+            6.0,
+            6.5,
+            7.0,
+            7.5,
+            8.0,
+        ],
         dtype=float,
     )
     y = np.array(
-        [0.4, 0.3, 1.0, 1.7, 2.1, 3.4, 4.1, 5.8, 7.7, 9.4, 11.4, 13.6, 15.6, 18.6, 21.2, 24.1],
+        [
+            0.4,
+            0.3,
+            1.0,
+            1.7,
+            2.1,
+            3.4,
+            4.1,
+            5.8,
+            7.7,
+            9.4,
+            11.4,
+            13.6,
+            15.6,
+            18.6,
+            21.2,
+            24.1,
+        ],
         dtype=float,
     )
 
