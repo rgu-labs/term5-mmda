@@ -6,7 +6,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <print>
+#include <string>
 #include <vector>
 
 namespace {
@@ -15,12 +17,31 @@ using MDAA::f64;
 using MDAA::usize;
 
 using Vector = Eigen::VectorXd;
+using Matrix = Eigen::MatrixXd;
 using Vectors = std::vector<Vector>;
+using Product = std::function<f64(const Vector &, const Vector &)>;
 
 constexpr f64 Tolerance = 1.0e-10;
 
-f64 InnerProduct(const Vector &a, const Vector &b) {
+f64 EuclideanProduct(const Vector &a, const Vector &b) {
     return a.dot(b);
+}
+
+Product MatrixProduct(const Matrix &a) {
+    return [a](const Vector &x, const Vector &y) -> f64 {
+        return x.dot(a * y);
+    };
+}
+
+Vector MakeVector(std::initializer_list<f64> values) {
+    Vector       result(static_cast<Eigen::Index>(values.size()));
+    Eigen::Index index = 0;
+
+    for (const f64 value : values) {
+        result[index++] = value;
+    }
+
+    return result;
 }
 
 void PrintVector(const Vector &vector) {
@@ -41,44 +62,28 @@ void PrintVectors(const char *name, const Vectors &vectors) {
     }
 }
 
-void PrintGram(const Vectors &vectors, const char *title) {
-    std::println("{}", title);
-
-    for (const Vector &row : vectors) {
-        std::print("  [");
-
-        for (const Vector &column : vectors) {
-            std::print("{:>12.6f}", InnerProduct(row, column));
-        }
-
-        std::println("]");
-    }
-}
-
-f64 MaxOffDiagonal(const Vectors &vectors) {
+f64 MaxOffDiagonal(const Vectors &vectors, const Product &product) {
     f64 result = 0.0;
 
     for (usize row = 0; row < vectors.size(); row++) {
         for (usize column = row + 1; column < vectors.size(); column++) {
-            result = std::max(result, std::abs(InnerProduct(vectors[row], vectors[column])));
+            result = std::max(result, std::abs(product(vectors[row], vectors[column])));
         }
     }
 
     return result;
 }
 
-void Show(const char *title, const Vectors &input) {
-    const Vectors output = MDAA::Orthogonalize(input, InnerProduct);
-    const f64     residual = MaxOffDiagonal(output);
+void Show(const std::string &title, const Vectors &input, const Product &product) {
+    const Vectors output = MDAA::Orthogonalize(input, product);
+    const f64     residual = MaxOffDiagonal(output, product);
 
     std::println("{}", title);
     std::println("input:");
-    PrintVectors("v", input);
-    PrintGram(input, "Gram matrix before:");
+    PrintVectors("a", input);
     std::println("output:");
-    PrintVectors("q", output);
-    PrintGram(output, "Gram matrix after:");
-    std::println("max |(q_i, q_j)|, i != j = {:.3e}", residual);
+    PrintVectors("b", output);
+    std::println("max |(b_i, b_j)|, i != j = {:.3e}", residual);
 
     MDAA_CHECKF(
         input.size() == output.size(),
@@ -96,27 +101,58 @@ void Show(const char *title, const Vectors &input) {
 int main() {
     Eigen::setNbThreads(1);
 
-    const Vectors independent {
-        Eigen::Vector4d(1.0, 1.0, 1.0, 1.0),
-        Eigen::Vector4d(1.0, 2.0, 3.0, 4.0),
-        Eigen::Vector4d(1.0, 4.0, 9.0, 16.0),
-        Eigen::Vector4d(1.0, 8.0, 27.0, 64.0),
+    const Vectors task1A {
+        MakeVector({1, 1, 0, 0}),
+        MakeVector({1, 0, 1, 0}),
+        MakeVector({1, 0, 0, 1}),
+        MakeVector({0, 0, 1, 1}),
     };
 
-    const Vectors dependent {
-        Eigen::Vector3d(1.0, 2.0, 3.0),
-        Eigen::Vector3d(2.0, 4.0, 6.0),
-        Eigen::Vector3d(0.0, 1.0, 0.0),
+    const Vectors task1B {
+        MakeVector({1, 1, 0, 0, 0}),
+        MakeVector({1, 0, 1, 0, 0}),
+        MakeVector({1, 0, 0, 1, 0}),
+        MakeVector({1, 0, 0, 0, 1}),
     };
 
-    std::println("Orthogonalization");
-    std::println("inner product: (x, y) = sum x_i * y_i");
+    const Vectors task1C {
+        MakeVector({2, 0, 1, 0}),
+        MakeVector({1, 1, 0, 1}),
+        MakeVector({0, 2, 1, 1}),
+    };
+
+    Matrix matrix2A(4, 4);
+    matrix2A << 1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 3, 0,
+        0, 0, 0, 2;
+
+    Matrix matrix2B(5, 5);
+    matrix2B << 5, 1, 0, 0, 0,
+        1, 5, 1, 0, 0,
+        0, 1, 5, 1, 0,
+        0, 0, 1, 5, 1,
+        0, 0, 0, 1, 5;
+
+    Matrix matrix2C(4, 4);
+    matrix2C << 2, 1, 0, 0,
+        1, 2, 1, 0,
+        0, 1, 2, 1,
+        0, 0, 1, 2;
+
+    std::println("Task 1: Euclidean inner product");
     std::println();
 
-    Show("linearly independent vectors", independent);
-    Show("linearly dependent vectors: v2 = 2 * v1", dependent);
+    Show("1a", task1A, EuclideanProduct);
+    Show("1b", task1B, EuclideanProduct);
+    Show("1c", task1C, EuclideanProduct);
 
-    std::println("a dependent vector becomes zero and adds no new direction");
+    std::println("Task 2: inner product [x, y]_A = x^T A y");
+    std::println();
+
+    Show("2a", task1A, MatrixProduct(matrix2A));
+    Show("2b", task1B, MatrixProduct(matrix2B));
+    Show("2c", task1C, MatrixProduct(matrix2C));
 
     return 0;
 }
