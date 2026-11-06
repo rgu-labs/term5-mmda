@@ -142,26 +142,21 @@ void Solve(const Task &task, f64 eps, i32 precision) {
         std::println("   exact = {:.{}f}", *task.exact, precision + 4);
     }
 
-    std::println("   {:<10} {:>10} {:>22} {:>22} {:>12} {:>12}",
-                 "method", "n", "I", "I refined", "runge", "|I - exact|");
+    std::println("   {:<10} {:>10} {:>22} {:>12} {:>12}",
+                 "method", "n", "I", "runge", "|I - exact|");
 
     for (const Method method : methods) {
         const MDAA::RungeResult result = MDAA::IntegrateRunge(task.f, task.a, task.b, method, eps, task.n0);
 
-        std::print("   {:<10} {:>10} {:>22.{}f} {:>22.{}f} {:>12.3e}",
+        std::print("   {:<10} {:>10} {:>22.{}f} {:>12.3e}",
                    MDAA::MethodName(method), result.n,
                    result.value, precision + 4,
-                   result.refined, precision + 4,
                    result.error);
 
         if (task.exact) {
             std::print(" {:>12.3e}", std::abs(result.value - *task.exact));
         } else {
             std::print(" {:>12}", "-");
-        }
-
-        if (!result.converged) {
-            std::print("  (n limit reached)");
         }
 
         std::println("");

@@ -75,7 +75,7 @@ std::string_view MethodName(Method method) {
 }
 
 RungeResult IntegrateRunge(const Integrand &f, f64 a, f64 b, Method method,
-                           f64 eps, i64 n0, i64 maxN) {
+                           f64 eps, i64 n0) {
     i64 n = n0 < 2 ? 2 : n0;
 
     if (method == Method::Simpson && n % 2 != 0) {
@@ -87,18 +87,16 @@ RungeResult IntegrateRunge(const Integrand &f, f64 a, f64 b, Method method,
     RungeResult result;
     f64         previous = Integrate(f, a, b, method, n);
 
-    while (2 * n <= maxN) {
+    while (true) {
         n *= 2;
         const f64 current = Integrate(f, a, b, method, n);
         const f64 difference = (current - previous) / denominator;
 
         result.value = current;
-        result.refined = current + difference;
         result.error = std::abs(difference);
         result.n = n;
 
         if (result.error < eps) {
-            result.converged = true;
             break;
         }
 

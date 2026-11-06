@@ -29,14 +29,12 @@ i32 Order(Method method);
 std::string_view MethodName(Method method);
 
 struct RungeResult {
-    f64  value = 0.0;   // I_2n
-    f64  refined = 0.0; // I_2n + (I_2n - I_n) / (2^p - 1)
-    f64  error = 0.0;   // |I_2n - I_n| / (2^p - 1)
-    i64  n = 0;
-    bool converged = false;
+    f64 value = 0.0;
+    f64 error = 0.0;
+    i64 n = 0;
 };
 
 RungeResult IntegrateRunge(const Integrand &f, f64 a, f64 b, Method method,
-                           f64 eps, i64 n0 = 2, i64 maxN = i64 {67'108'864});
+                           f64 eps, i64 n0 = 2);
 
 } // namespace MDAA
