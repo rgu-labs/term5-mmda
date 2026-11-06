@@ -1,0 +1,9 @@
+mdaa_executable(
+  NAME
+    Lab11.I
+  SOURCES
+    Main.cpp
+  DEPS
+    MDAA::Core
+    MDAA::Interpolation
+)

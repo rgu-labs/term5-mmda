@@ -1,3 +1,5 @@
 add_subdirectory(Core)
+add_subdirectory(Integration)
+add_subdirectory(Interpolation)
 add_subdirectory(LinearAlgebra)
 add_subdirectory(Optimization)

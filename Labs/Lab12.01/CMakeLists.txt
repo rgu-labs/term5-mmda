@@ -1,0 +1,9 @@
+mdaa_executable(
+  NAME
+    Lab12.01
+  SOURCES
+    Main.cpp
+  DEPS
+    MDAA::Core
+    MDAA::Integration
+)
